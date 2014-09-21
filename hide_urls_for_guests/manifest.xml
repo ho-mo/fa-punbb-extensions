@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+/*
+ * manifest file for hide_urls_for_guests
+ *
+ * @copyright Copyright (C) 2009 Daniel Rokven @ http://kierownik.nl
+ * @license http://www.gnu.org/licenses/gpl.html GPL version 2 or higher
+ * @package hide_urls_for_guests
+*/
+-->
+<extension engine="1.0">
+	<id>hide_urls_for_guests</id>
+	<title>hide urls for guests</title>
+	<version>0.1</version>
+	<description>This extension hides all the urls in posts for guests.</description>
+	<author>kierownik</author>
+	<minversion>1.4</minversion>
+	<maxtestedon>1.4.2</maxtestedon>
+
+	<install>
+		<![CDATA[
+		]]>
+	</install>
+
+	<uninstall>
+		<![CDATA[
+		]]>
+	</uninstall>
+
+	<hooks>
+		<hook id="vt_start">
+			<![CDATA[
+				if (file_exists($ext_info['path'].'/lang/'.$forum_user['language'].'.php'))
+					require $ext_info['path'].'/lang/'.$forum_user['language'].'.php';
+				else
+					require $ext_info['path'].'/lang/English.php';
+			]]>
+		</hook>
+		<hook id="ps_handle_url_tag_end">
+			<![CDATA[
+				global $forum_user, $lang_hide_urls_for_guests, $forum_url;
+
+	if ($forum_user['is_guest'])
+    {
+        if ($bbcode)
+        {
+            if ($full_url == $link)
+                return '[url]'.$link.'[/url]';
+            else
+                return '[url='.$full_url.']'.$link.'[/url]';
+        }
+        else
+		{
+			$register = '<a href="'.forum_link($forum_url['register']).'">'.$lang_hide_urls_for_guests['register'].'</a>';
+			$login = '<a href="'.forum_link($forum_url['login']).'">'.$lang_hide_urls_for_guests['login'].'</a>';
+			$lang_hide_urls_for_guests['replace url'] = sprintf($lang_hide_urls_for_guests['replace url'], $register, $login);
+            return '('.$lang_hide_urls_for_guests['replace url'].')';
+		}
+    }
+    else
+			]]>
+		</hook>
+	</hooks>
+</extension>

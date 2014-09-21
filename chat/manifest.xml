@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE extension SYSTEM "ext-1.0.dtd">
+
+<extension engine="1.0">
+	<id>chat</id>
+	<title>Chat</title>
+	<version>1.1</version>
+	<description>PunBB Ajax Chat</description>
+	<author>Delta</author>
+
+	<minversion>1.4.1</minversion>
+	<maxtestedon>1.4.5</maxtestedon>
+
+	<hooks>
+		<hook id="fn_generate_navlinks_start"><![CDATA[
+                       if (!$forum_user['is_guest']) 
+                       {
+	                        $links['index'] = '';
+	                        $links['chat'] = '<li id="navchat"'.((FORUM_PAGE == 'تالار گفتگو') ? ' class="isactive"' : '').'>
+	                        <a href="'.forum_link($forum_url['nav_chat']).'">تالار گفتگو</a></li>';
+                       }
+		]]></hook>
+		
+		<hook id="ca_fn_generate_admin_menu_new_sublink"><![CDATA[
+			if (FORUM_PAGE_SECTION == 'management')
+			{
+				$forum_page['admin_submenu']['chat'] = '<li class="'.((FORUM_PAGE == 'admin-settings-chat') ? 'active' : 'normal').((empty($forum_page['admin_submenu'])) ? ' first-item' : '').'"><a href="'.forum_link($forum_url['admin_chat']).'">تالار گفتگو</a></li>';
+			}
+		]]></hook>
+		
+		<hook id="co_modify_url_scheme"><![CDATA[
+			require $ext_info['path'].'/url/Default.php';
+		]]></hook>
+	</hooks>
+</extension>

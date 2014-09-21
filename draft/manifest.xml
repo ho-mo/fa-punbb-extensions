@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+/***********************************************************************
+
+	@author        : Bedroom
+	@copyright     : 2012
+	@license       : WTFPL (http://sam.zoy.org/wtfpl)
+
+************************************************************************/
+-->
+<extension engine="1.0">
+	<id>draft</id>
+	<title>Draft posts</title>
+	<version>1.0.4</version>
+	<description>Allows logged in users to save their new message as a draft when they can't post it right away.</description>
+	<author>Bedroom</author>
+	<minversion>1.3</minversion>
+	<maxtestedon>1.4.2</maxtestedon>
+	<install>
+		<![CDATA[
+// Setup main table
+if (!$forum_db->table_exists('drafts'))
+{
+	$schema = array(
+		'FIELDS'		=> array(
+			'id'			=> array(
+				'datatype'		=> 'SERIAL',
+				'allow_null'	=> false
+			),
+			'user_id'			=> array(
+				'datatype'		=> 'int(10)',
+				'allow_null'	=> false
+			),
+			'topic_id'		=> array(
+				'datatype'		=> 'int(10)',
+				'allow_null'	=> true
+			),
+			'forum_id'		=> array(
+				'datatype'		=> 'int(10)',
+				'allow_null'	=> true
+			),
+			'subject'		=> array(
+				'datatype'		=> 'varchar(255)',
+				'allow_null'	=> true
+			),
+			'message'		=> array(
+				'datatype'		=> 'TEXT',
+				'allow_null'	=> false
+			),
+			'hide_smilies'		=> array(
+				'datatype'		=> 'tinyint(1)',
+				'allow_null'	=> false
+			),
+		),
+		'PRIMARY KEY'	=> array('id'),
+		'INDEXES'		=> array(
+			'user_topic_forum_idx'	=> array('user_id', 'topic_id', 'forum_id', 'id'),
+		)
+	);
+
+	$forum_db->create_table('drafts', $schema);
+}
+		]]>
+	</install>
+
+	<uninstall>
+		<![CDATA[
+		$forum_db->drop_table('drafts');
+		]]>
+	</uninstall>
+	<hooks>
+		<hook id="hd_visit_elements" priority="7">
+			<![CDATA[
+if (!$forum_user['is_guest'])
+{
+	$query = array(
+		'SELECT' => 'COUNT(*) AS num_drafts',
+		'FROM'	=> 'drafts AS d',
+		'WHERE' => 'd.user_id='.$forum_user['id']
+	);
+	$cnt_drafts = $forum_db->query_build($query) or error(__FILE__, __LINE__);
+	$row = $forum_db->fetch_row($cnt_drafts);
+	$num_drafts = $row[0];
+	if ($num_drafts > 0)
+	{
+		if (file_exists($ext_info['path'].'/lang/'.$forum_user['language'].'/'.$ext_info['id'].'.php'))
+			include $ext_info['path'].'/lang/'.$forum_user['language'].'/'.$ext_info['id'].'.php';
+		else
+			include $ext_info['path'].'/lang/English/draft.php';
+
+		if (array_key_exists('<!-- forum_visit -->', $visit_elements))
+		{
+			// We're still in 1.3 here
+			$visit_drafts = '<span id="visit-drafts"><a href="'.forum_link('misc.php?section=drafts').'" title="'.$lang_draft['Drafts title'].'"><strong>'.$lang_draft['Drafts'].' ('.$num_drafts.')</strong></a></span>';
+			$visit_elements['<!-- forum_visit -->'] = preg_replace('#(<p id="visit-links" class="options">.*?)(</p>)#', '$1 '.$visit_drafts.' $2', $visit_elements['<!-- forum_visit -->']);
+		}
+		else
+			$visit_links['drafts'] = '<span id="visit-drafts"><a href="'.forum_link('misc.php?section=drafts').'" title="'.$lang_draft['Drafts title'].'"><strong>'.$lang_draft['Drafts'].' ('.$num_drafts.')</strong></a></span>';
+	}
+}
+			]]>
+		</hook>
+		<hook id="mi_new_action" priority="5">
+			<![CDATA[
+if (!$forum_user['is_guest'] &&isset($_GET['section']) && $_GET['section'] == 'drafts')
+{
+	if (file_exists($ext_info['path'].'/lang/'.$forum_user['language'].'/'.$ext_info['id'].'.php'))
+		include $ext_info['path'].'/lang/'.$forum_user['language'].'/'.$ext_info['id'].'.php';
+	else
+		include $ext_info['path'].'/lang/English/draft.php';
+	require $ext_info['path'].'/drafts.php';
+}
+			]]>
+		</hook>
+		<hook id="vt_quickpost_end" priority="5">
+			<![CDATA[
+if (!$forum_user['is_guest'])
+{
+	if (file_exists($ext_info['path'].'/lang/'.$forum_user['language'].'/'.$ext_info['id'].'.php'))
+		include $ext_info['path'].'/lang/'.$forum_user['language'].'/'.$ext_info['id'].'.php';
+	else
+		include $ext_info['path'].'/lang/English/draft.php';
+
+	$tpl_temp = forum_trim(ob_get_contents());
+	$tpl_main = str_replace('<!-- forum_qpost -->', $tpl_temp, $tpl_main);
+	$tpl_main = preg_replace('#(<div class="frm-buttons">)(.+?)(</div>)#s', '${1}${2}<span class="submit"><input type="submit" name="draft" value="'.$lang_draft['Save draft button'].'" /></span>$3', $tpl_main);
+	ob_end_clean();
+	// END SUBST - <!-- forum_qpost -->
+
+	// Increment "num_views" for topic
+	if ($forum_config['o_topic_views'] == '1')
+	{
+		$query = array(
+			'UPDATE'	=> 'topics',
+			'SET'		=> 'num_views=num_views+1',
+			'WHERE'		=> 'id='.$id,
+		);
+
+		($hook = get_hook('vt_qr_increment_num_views')) ? eval($hook) : null;
+		$forum_db->query_build($query) or error(__FILE__, __LINE__);
+	}
+
+	$forum_id = $cur_topic['forum_id'];
+
+	require FORUM_ROOT.'footer.php';
+}
+			]]>
+		</hook>
+		<hook id="po_start" priority="5">
+			<![CDATA[
+if (!$forum_user['is_guest'])
+{
+	if (file_exists($ext_info['path'].'/lang/'.$forum_user['language'].'/'.$ext_info['id'].'.php'))
+		include $ext_info['path'].'/lang/'.$forum_user['language'].'/'.$ext_info['id'].'.php';
+	else
+		include $ext_info['path'].'/lang/English/draft.php';
+}
+			]]>
+		</hook>
+		<hook id="po_posting_location_selected" priority="5">
+			<![CDATA[
+if(isset($_GET['draft']))
+{
+	$draft_id=intval($_GET['draft']);
+	$query = array(
+		'SELECT'	=> 'd.id, d.subject, d.message, d.hide_smilies',
+		'FROM'		=> 'drafts AS d',
+		'WHERE'		=> 'd.id='.$draft_id
+	);
+	($hook = get_hook('po_qr_draft')) ? eval($hook) : null;
+	$result = $forum_db->query_build($query) or error(__FILE__, __LINE__);
+	if($forum_db->num_rows($result) != 1)
+		message($lang_common['Bad request']);
+	else
+		$draft = $forum_db->fetch_assoc($result);
+}
+			]]>
+		</hook>
+		<hook id="po_pre_header_load" priority="5">
+			<![CDATA[
+if(isset($draft_id))
+{
+	$forum_page['form_action'] = ($tid ? forum_link('post.php?tid=$1&draft=$2', array($tid, $draft_id)) : forum_link('post.php?fid=$1&draft=$2', array($fid, $draft_id)));
+	$forum_page['hidden_fields']['csrf_token'] = '<input type="hidden" name="csrf_token" value="'.generate_form_token($forum_page['form_action']).'" />';
+}
+			]]>
+		</hook>
+		<hook id="po_preview_new_post_entry_data" priority="5">
+			<![CDATA[
+if(isset($_POST['draft']))
+{
+	echo '</div></div></div><div class="ct-box info-box">'.$lang_draft['Draft saved'].'</div><div><div><div>';
+}
+			]]>
+		</hook>
+		<hook id="po_end" priority="5">
+			<![CDATA[
+if (!$forum_user['is_guest'])
+{
+	$tpl_temp = forum_trim(ob_get_contents());
+	$tpl_main = str_replace('<!-- forum_main -->', $tpl_temp, $tpl_main);
+	$tpl_main = preg_replace('#(<div class="frm-buttons">)(.+?)(</div>)#s', '${1}${2}<span class="submit"><input type="submit" name="draft" value="'.$lang_draft['Save draft button'].'" /></span>$3', $tpl_main);
+	ob_end_clean();
+	// END SUBST - <!-- forum_main -->
+
+	require FORUM_ROOT.'footer.php';
+}
+			]]>
+		</hook>
+		<hook id="po_pre_req_info_fieldset" priority="5">
+			<![CDATA[
+if(isset($draft) && !isset($_POST['form_sent']))
+{
+	$subject = $_POST['req_subject'] = $draft['subject'];
+	$message = $_POST['req_message'] = $draft['message'];
+	if ($draft['hide_smilies'] == 1)
+		$_POST['hide_smilies'] = 1;
+}
+			]]>
+		</hook>
+		<hook id="po_end_validation" priority="5">
+			<![CDATA[
+	if (empty($errors) && isset($_POST['draft']))
+	{
+		// prevent normal posting
+		$_POST['preview'] = 1;
+		if (!isset($draft))
+		{
+			$query = array(
+				'INSERT' => 'user_id, message, hide_smilies',
+				'INTO' => 'drafts',
+				'VALUES' => $forum_user['id'].', \''.$forum_db->escape($message).'\', '.$hide_smilies,
+			);
+			if ($tid)
+			{
+				$query['INSERT'] .= ', topic_id';
+				$query['VALUES'] .= ', '.$tid;
+			}
+			elseif ($fid)
+			{
+				$query['INSERT'] .= ', forum_id, subject';
+				$query['VALUES'] .= ', '.$fid.', \''.$forum_db->escape($subject).'\'';
+			}
+			$forum_db->query_build($query) or error(__FILE__, __LINE__);
+			$draft_id = $forum_db->insert_id();
+		}
+		else
+		{
+			$query = array(
+				'UPDATE' => 'drafts',
+				'SET' => 'message=\''.$forum_db->escape($message).'\', hide_smilies='.$hide_smilies,
+				'WHERE' => 'id='.$draft['id']
+			);
+			if ($fid)
+				$query['SET'] .= ', subject=\''.$forum_db->escape($subject).'\'';
+			$forum_db->query_build($query) or error(__FILE__, __LINE__);
+		}
+	}
+			]]>
+		</hook>
+		<hook id="po_pre_redirect" priority="5">
+			<![CDATA[
+	if (isset($draft))
+	{
+		$query = array(
+			'DELETE' => 'drafts',
+			'WHERE' => 'id='.$draft['id']
+		);
+		$forum_db->query_build($query);
+	}
+			]]>
+		</hook>
+	</hooks>
+</extension>

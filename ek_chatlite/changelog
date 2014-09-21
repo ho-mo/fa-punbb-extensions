@@ -1,0 +1,42 @@
+*January 2009 v0.6.0
+  Added: Submit button
+  Fixed: XHTML 1.0 Strict validation errors
+
+*December 2008 v0.5.1
+  Updated: compatibility with other extensions using prototype
+
+*December 2008 v0.5.0
+  Fixed: <h2> css for FF3
+  Fixed: timestamps leading zeros
+  Updated: date or text alternative for timestamp
+  Updated: code improvement
+  Added: message deletion for admins and moderators
+
+*December 2008 v0.4.0
+  Fixed: punbb security token preventing message posting after a while
+  Updated: restricted compatibility to php 5.2.1
+  Updated: code and logic reworked
+  Added: timestamps and messages ID
+  Added: languages support
+  Data storage format changed
+
+*December 2008 v0.3.3
+  Fixed: JS error preventing chat refresh
+
+*December 2008 v0.3.2
+  Fixed: <script /> tag which was bugging IE6-7
+
+*December 2008 v0.3.1
+  Fixed: JS error preventing guests to see the chat
+
+*December 2008 v0.3.0
+  Updated: ported to an extension for PunBB 1.3
+  Updated: name is now ChatLite
+  First public version
+
+*November 2008 v0.2.0
+  Added: wait animation while sending message
+  Added: check for double messages
+
+*February 2008 v0.1.0
+  First functional version for PunBB 1.2 (not publicly released)

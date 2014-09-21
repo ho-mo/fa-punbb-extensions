@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE extension SYSTEM "ext-1.0.dtd">
+
+<!--
+/**
+ * Displays IP Geolocation in user profiles using geoPlugin (http://www.geoplugin.com)
+ *
+ * @copyright Copyright (C) 2008 PunBB
+ * @license http://www.gnu.org/licenses/gpl.html GPL version 2 or higher
+ * @package ip_geolocation
+ */
+-->
+
+<extension engine="1.0">
+	<id>ip_geolocation</id>
+	<title>IP Geolocation</title>
+	<version>1.5</version>
+	<description>Displays IP Geolocation (to Administrators only) in user profiles</description>
+	<author>Justice</author>
+
+	<minversion>1.3</minversion>
+	<maxtestedon>1.4.2</maxtestedon>
+
+	<install><![CDATA[
+		$forum_db->add_field('users', 'ip_geolocation', 'VARCHAR(40)', TRUE);
+	]]></install>
+
+	<uninstall><![CDATA[
+		$forum_db->drop_field('users', 'ip_geolocation');
+	]]></uninstall>
+
+	<hooks>
+		<hook id="co_common"><![CDATA[
+			// Get geographic location by IP address using GeoPlugin
+			function get_geolocation($user_ip) {
+				$geoplugin_response = get_remote_file('http://www.geoplugin.net/php.gp?ip='.$user_ip,8);
+				$geoplugin_content = unserialize($geoplugin_response['content']);
+				$geoplugin_region = trim($geoplugin_content['geoplugin_region']);
+				$geoplugin_city = trim($geoplugin_content['geoplugin_city']);
+				$geoplugin_country = trim($geoplugin_content['geoplugin_countryName']);
+				
+				return implode(', ', preg_split('/,/',$geoplugin_city . ',' . $geoplugin_region . ',' . $geoplugin_country, -1, PREG_SPLIT_NO_EMPTY));
+			}
+		]]></hook>
+		<hook id="pf_start, mi_start"><![CDATA[
+			// Load the extention language file
+			if (file_exists($ext_info['path'].'/lang/'.$forum_user['language'].'/'.$ext_info['id'].'.php'))
+				require $ext_info['path'].'/lang/'.$forum_user['language'].'/'.$ext_info['id'].'.php';
+			else
+				require $ext_info['path'].'/lang/English/'.$ext_info['id'].'.php';
+		]]></hook>
+		<hook id="pf_change_details_about_pre_header_load"><![CDATA[
+			if ($forum_user['is_admmod']) {
+				if ($user['ip_geolocation'] == '') {
+					$forum_page['user_private']['ip_geolocation'] = '<li><span>'.$lang_ip_geolocation['IP Geolocation'].': <a href="'.forum_link('misc.php?geolocate=$1', $id).'">'.$lang_ip_geolocation['Geolocate'].'</a></span></li>';
+				} else {
+					$forum_page['user_private']['ip_geolocation'] = '<li><span>'.$lang_ip_geolocation['IP Geolocation'].': <strong>'.forum_htmlencode($user['ip_geolocation']).'</strong></span></li>';
+					$forum_page['user_private']['ip_geolocation'].= '<li><img style="border:1px solid #CCCCCC;" src="http://maps.googleapis.com/maps/api/staticmap?center='.$user['ip_geolocation'].'&size=300x200&maptype=roadmap&sensor=false"><div style="width:300px;text-align:right;padding-top:0px;"><a href="http://www.geoplugin.com/" target="_new" title="geoPlugin for IP geolocation">Geolocation by geoPlugin</a></div></li>';
+				}
+			}
+		]]></hook>
+		<hook id="rg_register_pre_add_user"><![CDATA[
+			$user_info['ip_geolocation'] = get_geolocation($user_info['registration_ip']);
+		]]></hook>
+		<hook id="fn_add_user_qr_insert_user"><![CDATA[
+			$query['INSERT'] .= ', ip_geolocation';
+			$query['VALUES'] .= (isset($user_info['ip_geolocation']) && $user_info['ip_geolocation'] != '') ? ', \''.$forum_db->escape($user_info['ip_geolocation']).'\'' : ', \'N/A\'';
+
+			// Temporarily set notify_admins to false
+			$notify_admins_orig = $user_info['notify_admins'];
+			$user_info['notify_admins'] = false;
+
+		]]></hook>
+		<hook id="fn_add_user_end"><![CDATA[
+			if ($notify_admins_orig && $forum_config['o_mailing_list'] != '')
+			{
+				$mail_subject = 'Alert - New registration';
+				$mail_message = 'User \''.$user_info['username'].'\' registered in the forums at '.$base_url.'/'."\n\n".'User profile: '.forum_link($forum_url['user'], $new_uid)."\n\n".'IP Geolocation: '.$user_info['ip_geolocation']."\n\n".'-- '."\n".'Forum Mailer'."\n".'(Do not reply to this message)';
+
+				forum_mail($forum_config['o_mailing_list'], $mail_subject, $mail_message);
+			}
+
+			// Restore original value of notify_admins
+			$user_info['notify_admins'] = $notify_admins_orig;
+		]]></hook>
+		<hook id="mi_new_action"><![CDATA[
+			// Geolocate user			
+			if (isset($_GET['geolocate'])) {
+				$geolocate_id = intval($_GET['geolocate']);
+				if ($geolocate_id < 2)
+					message($lang_common['Bad request']);
+			
+				$query = array(
+					'SELECT'	=> 'u.registration_ip',
+					'FROM'		=> 'users AS u',
+					'WHERE'		=> 'u.id='.$geolocate_id
+				);
+
+				$result = $forum_db->query_build($query) or error(__FILE__, __LINE__);
+				if (!$forum_db->num_rows($result))
+					message($lang_common['Bad request']);
+
+				$user_geolocation = get_geolocation($forum_db->result($result));
+
+				// Set the user's geolocation
+				$query = array(
+					'UPDATE'	=> 'users',
+					'SET'		=> 'ip_geolocation=\''.$forum_db->escape($user_geolocation != '' ? $user_geolocation : 'N/A').'\'',
+					'WHERE'		=> 'id='.$geolocate_id,
+				);
+				$forum_db->query_build($query) or error(__FILE__, __LINE__);
+
+				redirect(forum_link($forum_url['user'], $geolocate_id), $lang_ip_geolocation['Geolocate redirect']);
+			}
+		]]></hook>
+	</hooks>
+</extension>

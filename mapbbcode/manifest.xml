@@ -1,0 +1,478 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE extension SYSTEM "ext-1.0.dtd">
+
+<extension engine="1.0">
+	<id>mapbbcode</id>
+	<title>MapBBCode</title>
+	<version>1.2.0</version>
+	<description>Maps for your forum: adds [map] bbcode, editor button and MapBBCode Share integration.</description>
+	<author>Ilya Zverev</author>
+
+	<minversion>1.3</minversion>
+	<maxtestedon>1.4.2</maxtestedon>
+
+	<install><![CDATA[
+		$pun_mapbb_ini = array(
+			'o_pun_mapbbcode_layers' => 'OpenStreetMap',
+			'o_pun_mapbbcode_default_zoom' => 2,
+			'o_pun_mapbbcode_default_pos' => '22,11',
+			'o_pun_mapbbcode_view_width' => 600,
+			'o_pun_mapbbcode_view_height' => 300,
+			'o_pun_mapbbcode_full_height' => 600,
+			'o_pun_mapbbcode_editor_height' => 400,
+			'o_pun_mapbbcode_window_width' => 800,
+			'o_pun_mapbbcode_window_height' => 500,
+			'o_pun_mapbbcode_always_full' => false,
+			'o_pun_mapbbcode_editor_window' => true,
+			'o_pun_mapbbcode_standard_switcher' => true,
+			'o_pun_mapbbcode_enable_external' => false,
+			'o_pun_mapbbcode_outer_link' => '',
+			'o_pun_mapbbcode_share_server' => 'http://share.mapbbcode.org/',
+			'o_pun_mapbbcode_allowed_tags' => '[auib]|span|br|em|strong|tt'
+		);
+		foreach( $pun_mapbb_ini as $conf_k => $conf_v ) {
+			if( !array_key_exists($conf_k, $forum_config) ) {
+				$query = array(
+					'INSERT' => 'conf_name, conf_value',
+					'INTO'   => 'config',
+					'VALUES' => "'$conf_k', '$conf_v'"
+				);
+				$forum_db->query_build($query) or error(__FILE__, __LINE__);
+			}
+		}
+	]]></install>
+
+	<uninstall><![CDATA[
+		$pun_mapbb_fields = implode(',', array(
+			'\'o_pun_mapbbcode_layers\'',
+			'\'o_pun_mapbbcode_default_zoom\'',
+			'\'o_pun_mapbbcode_default_pos\'',
+			'\'o_pun_mapbbcode_view_width\'',
+			'\'o_pun_mapbbcode_view_height\'',
+			'\'o_pun_mapbbcode_full_height\'',
+			'\'o_pun_mapbbcode_editor_height\'',
+			'\'o_pun_mapbbcode_window_width\'',
+			'\'o_pun_mapbbcode_window_height\'',
+			'\'o_pun_mapbbcode_always_full\'',
+			'\'o_pun_mapbbcode_editor_window\'',
+			'\'o_pun_mapbbcode_standard_switcher\'',
+			'\'o_pun_mapbbcode_enable_external\'',
+			'\'o_pun_mapbbcode_outer_link\'',
+			'\'o_pun_mapbbcode_share_server\'',
+			'\'o_pun_mapbbcode_allowed_tags\''
+		));
+		$query = array('DELETE' => 'config', 'WHERE' => "conf_name IN ($pun_mapbb_fields)");
+		$forum_db->query_build($query) or error(__FILE__, __LINE__);
+	]]></uninstall>
+
+	<hooks>
+		<hook id="ps_preparse_tags_start"><![CDATA[
+			$tags[] = 'map';
+			$tags[] = 'mapid';
+			$tags_block[] = 'map';
+			$tags_limit_bbcode['mapid'] = array();
+			$tags_quotes[] = 'map';
+		]]></hook>
+		<hook id="ps_parse_message_bbcode"><![CDATA[
+			if( !function_exists('plugin_mapbbcode_replacement') ) {
+				function plugin_mapbbcode_replacement($m) {
+					$id = mt_rand();
+					if( $m[1] == 'map' ) {
+						return '<div id="mapbb'.$id.'">'.htmlspecialchars($m[0]).'</div><script>if(mapBBcode) mapBBcode.show("mapbb'.$id.'");</script>';
+					} elseif( $m[1] == 'mapid' ) {
+						return '<div id="mapext'.$id.'"></div><script>if(mapBBcode) mapBBcode.showExternal("mapext'.$id.'", "'.$m[2].'");</script>';
+					}
+					return $m[0];
+				}
+			}
+			$i = mt_rand();
+			$text = preg_replace_callback('#\[(map)(=[0-9,.-]+)?\](.*?)\[/map\]#si', 'plugin_mapbbcode_replacement', $text);
+			if( $forum_config['o_pun_mapbbcode_enable_external'] )
+				$text = preg_replace_callback('#\[(mapid)\]([a-z]+)\[/mapid\]#i', 'plugin_mapbbcode_replacement', $text);
+		]]></hook>
+		<hook id="vt_pre_header_load"><![CDATA[
+			// to check for mapbbcode beforehand, we need to do another db query
+			$query = array(
+				'SELECT'   => 'p.message',
+				'FROM'     => 'posts as p',
+				'WHERE'    => 'p.topic_id = '.$id,
+				'ORDER BY' => 'p.id',
+				'LIMIT'    => $forum_page['start_from'].','.$forum_user['disp_posts']
+			);
+			$result = $forum_db->query_build($query) or error(__FILE__, __LINE__);
+			$mapbbcode_present = false;
+			while( !$mapbbcode_present && $cur_post = $forum_db->fetch_assoc($result) ) {
+				$text = $cur_post['message'];
+				if( preg_match('#\[map(=[0-9,.-]+)?\].*?\[/map\]|\[mapid\][a-z]+\[/mapid\]#', $text) )
+					$mapbbcode_present = true;
+			}
+		]]></hook>
+		<hook id="se_results_pre_header_load"><![CDATA[
+			if( $show_as == 'posts' ) {
+				foreach( $search_set as $cur_set ) {
+					if( preg_match('#\[map(=[0-9,.-]+)?\].*?\[/map\]|\[mapid\][a-z]+\[/mapid\]#', $cur_set['message']) )
+						$mapbbcode_present = true;
+				}
+			}
+		]]></hook>
+		<hook id="ed_pre_header_load"><![CDATA[ // 1.4
+			$mapbbcode_present = true;
+		]]></hook>
+		<hook id="po_start"><![CDATA[
+			$mapbbcode_present = true;
+		]]></hook>
+		<hook id="hd_head"><![CDATA[
+			//echo !isset($mapbbcode_present) ? 'no mapbb' : 'mapbb='.($mapbbcode_present ? 'true' : 'false');
+			if( isset($mapbbcode_present) && $mapbbcode_present ) {
+				$disext = $forum_config['o_pun_mapbbcode_enable_external'] ? '' : 'mapBBcode.showExternal = function(a,b) {};';
+				$ffs = $forum_config['o_pun_mapbbcode_always_full'] ? 'true' : 'false';
+				$upload = $forum_config['o_pun_mapbbcode_enable_external'] ? 'true' : 'false';
+				$ssw = $forum_config['o_pun_mapbbcode_standard_switcher'] ? 'true' : 'false';
+
+				$mapbb_libpath = $ext_info['url'].'/js';
+				$mapbb_lang = file_exists($ext_info['path'].'/js/lang/'.$lang_common['lang_identifier'].'.js') ? $lang_common['lang_identifier'] : 'en';
+				$proprietary = ($hook = get_hook('pun_mapbbcode_js_proprietary')) ? eval($hook) : '';
+				$forum_head['mapbbcode'] = <<<MAPBBCODE
+<link rel="stylesheet" href="$mapbb_libpath/leaflet.css" />
+<link rel="stylesheet" href="$mapbb_libpath/leaflet.draw.css" />
+<script src="$mapbb_libpath/leaflet.js"></script>
+<script src="$mapbb_libpath/leaflet.draw.js"></script>
+<script src="$mapbb_libpath/mapbbcode.js"></script>
+<script src="$mapbb_libpath/LayerList.js"></script>
+$proprietary
+<script src="$mapbb_libpath/lang/$mapbb_lang.js"></script>
+<style>
+	.brd .ct-box .leaflet-container div {
+		padding: 0;
+	}
+</style>
+<script language="Javascript" type="text/javascript">
+<!--
+var mapBBcode = new MapBBCode({
+	windowPath: '$mapbb_libpath/',
+	layers: "{$forum_config['o_pun_mapbbcode_layers']}",
+	defaultZoom: {$forum_config['o_pun_mapbbcode_default_zoom']},
+	defaultPosition: [{$forum_config['o_pun_mapbbcode_default_pos']}],
+	viewWidth: {$forum_config['o_pun_mapbbcode_view_width']},
+	viewHeight: {$forum_config['o_pun_mapbbcode_view_height']},
+	fullViewHeight: {$forum_config['o_pun_mapbbcode_full_height']},
+	editorHeight: {$forum_config['o_pun_mapbbcode_editor_height']},
+	windowWidth: {$forum_config['o_pun_mapbbcode_window_width']},
+	windowHeight: {$forum_config['o_pun_mapbbcode_window_height']},
+	fullFromStart: $ffs,
+	preferStandardLayerSwitcher: $ssw,
+	outerLinkTemplate: '{$forum_config['o_pun_mapbbcode_outer_link']}',
+	uploadButton: $upload,
+	externalEndpoint: '{$forum_config['o_pun_mapbbcode_share_server']}'
+});
+$disext
+//-->
+</script>
+MAPBBCODE;
+			}
+		]]></hook>
+		<hook id="mi_new_action" priority="4"><![CDATA[
+			if( $action == 'news' ) // pun_forum_news has no hooks
+				$mapbbcode_present = true;
+		]]></hook>
+		<hook id="pun_bbcode_styles_loaded"><![CDATA[ // 1.4
+			$forum_loader->add_css('#pun_bbcode_bar input[name="map"].image { background: url('.$ext_info['url'].'/map.gif); }', array('type' => 'inline', 'media' => 'screen'));
+		]]></hook>
+		<hook id="pun_bbcode_pre_buttons_output"><![CDATA[ // 1.4
+			if( !isset($tags) && isset($this) && isset($GLOBALS['mapbbcode_present']) && $GLOBALS['mapbbcode_present'] ) {
+				$method = $forum_config['o_pun_mapbbcode_editor_window'] ? 'editorWindow(' : 'editor(\\\'mapedit\\\', ';
+				$onclick = 'javascript:mapBBcode.'.$method.'document.getElementsByName(\'req_message\')[0]); return false;';
+				$this->add_button(array('name' => 'map', 'weight' => 59, 'image' => true, 'onclick' => $onclick));
+			}
+		]]></hook>
+		<hook id="pun_bbcode_buttons_output_loop_start"><![CDATA[ // 1.3
+			if( isset($tag) && $tag == 'color' && isset($GLOBALS['mapbbcode_present']) && $GLOBALS['mapbbcode_present'] ) {
+				if( $forum_user['pun_bbcode_use_buttons'] )
+					echo "\t\t".'<img src="'.$ext_info['url'].'/map16.gif" alt="[map]" title="Map"';
+				else
+					echo "\t\t".'<input type="button" value="Map" name="map"';
+				$method = $forum_config['o_pun_mapbbcode_editor_window'] ? 'editorWindow(' : 'editor(\\\'mapedit\\\', ';
+				echo ' onclick="javascript:mapBBcode.'.$method.'document.getElementsByName(\'req_message\')[0]); return false;" />'."\n";
+			}
+		]]></hook>
+		<hook id="he_new_bbcode_section"><![CDATA[
+			if (file_exists($ext_info['path'].'/lang/'.$forum_user['language'].'/pun_mapbbcode.php'))
+				include $ext_info['path'].'/lang/'.$forum_user['language'].'/pun_mapbbcode.php';
+			else
+				include $ext_info['path'].'/lang/English/pun_mapbbcode.php';
+			?>
+			<div class="ct-box help-box">
+				<h3 class="hn"><span><?php echo $lang_pun_mapbbcode['Map BBCode info'] ?></span></h3>
+				<div class="entry-content">
+					<code>[map]...[/map]</code> <span><?php echo $lang_pun_mapbbcode['produces map see manual'] ?></span>
+				</div>
+				<div class="entry-content">
+					<code>[mapid]<?php echo $lang_pun_mapbbcode['Mapid text'] ?>[/mapid]</code> <span><?php echo $lang_pun_mapbbcode['produces shared map'] ?></span>
+				</div>
+				<div class="entry-content">
+					<div><?php echo $lang_pun_mapbbcode['Map links'] ?></div>
+				</div>
+			</div>
+			<?php
+		]]></hook>
+		<hook id="pun_pm_new_send_action"><![CDATA[
+			$mapbbcode_present = true;
+		]]></hook>
+		<hook id="pun_pm_pre_page_building"><![CDATA[
+			if( $pun_pm_page == 'write' || $pun_pm_page == 'compose' )
+				$mapbbcode_present = true;
+		]]></hook>
+		<hook id="pun_pm_fn_message_pre_output"><![CDATA[
+			// if( preg_match('#\[map(=[0-9,.-]+)?\].*?\[/map\]|\[mapid\][a-z]+\[/mapid\]#', $message['body']) )
+			$GLOBALS['mapbbcode_present'] = true; // unconditional: there is a post form below
+		]]></hook>
+		<hook id="ca_fn_generate_admin_menu_new_sublink"><![CDATA[
+			if( $forum_user['g_id'] == FORUM_ADMIN && FORUM_PAGE_SECTION == 'settings' ) {
+				$forum_page['admin_submenu']['mapbbcode'] = '<li class="'.((FORUM_PAGE == 'admin-settings-mapbbcode') ? 'active' : 'normal').((empty($forum_page['admin_submenu'])) ? 'first-item' : '').'"><a href="'.forum_link(str_replace('features', 'mapbbcode', $forum_url['admin_settings_features'])).'">MapBBCode</a></li>';
+			}
+		]]></hook>
+		<hook id="aop_pre_redirect"><![CDATA[
+			if( $section == 'mapbbcode' )
+				redirect(forum_link(str_replace('features', 'mapbbcode', $forum_url['admin_settings_features'])), $lang_admin_settings['Settings updated'].' '.$lang_admin_common['Redirect']);
+		]]></hook>
+		<hook id="aop_new_section_validation"><![CDATA[
+			if( $section == 'mapbbcode' ) {
+				if (file_exists($ext_info['path'].'/lang/'.$forum_user['language'].'/pun_mapbbcode.php'))
+					include $ext_info['path'].'/lang/'.$forum_user['language'].'/pun_mapbbcode.php';
+				else
+					include $ext_info['path'].'/lang/English/pun_mapbbcode.php';
+
+				if (!isset($form['pun_mapbbcode_enable_external']) || $form['pun_mapbbcode_enable_external'] != '1') $form['pun_mapbbcode_enable_external'] = '0';
+				if (!isset($form['pun_mapbbcode_always_full']) || $form['pun_mapbbcode_always_full'] != '1') $form['pun_mapbbcode_always_full'] = '0';
+				if (!isset($form['pun_mapbbcode_editor_window']) || $form['pun_mapbbcode_editor_window'] != '1') $form['pun_mapbbcode_editor_window'] = '0';
+				if (!isset($form['pun_mapbbcode_standard_switcher']) || $form['pun_mapbbcode_standard_switcher'] != '1') $form['pun_mapbbcode_standard_switcher'] = '0';
+
+				$form['pun_mapbbcode_default_zoom'] = intval($form['pun_mapbbcode_default_zoom']);
+				$form['pun_mapbbcode_view_width'] = intval($form['pun_mapbbcode_view_width']);
+				$form['pun_mapbbcode_view_height'] = intval($form['pun_mapbbcode_view_height']);
+				$form['pun_mapbbcode_full_height'] = intval($form['pun_mapbbcode_full_height']);
+				$form['pun_mapbbcode_editor_height'] = intval($form['pun_mapbbcode_editor_height']);
+				$form['pun_mapbbcode_window_width'] = intval($form['pun_mapbbcode_window_width']);
+				$form['pun_mapbbcode_window_height'] = intval($form['pun_mapbbcode_window_height']);
+
+				if( isset($form['pun_mapbbcode_default_pos']) && !preg_match('#^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$#', $form['pun_mapbbcode_default_pos']) )
+					message($lang_pun_mapbbcode['Error default pos']);
+				if( $form['pun_mapbbcode_outer_link'] != '' && !preg_match('#^https?://#', $form['pun_mapbbcode_outer_link']) )
+					message($lang_pun_mapbbcode['Error outer link']);
+				if( isset($form['pun_mapbbcode_share_server']) && !preg_match('#^https?://#', $form['pun_mapbbcode_share_server']) )
+					message($lang_pun_mapbbcode['Error share server']);
+				if( !preg_match('#^[a-z\[\]|.+]*$#', $form['pun_mapbbcode_allowed_tags']) )
+					message($lang_pun_mapbbcode['Error allowed tags']);
+				if( $form['pun_mapbbcode_layers'] == '' ) $form['pun_mapbbcode_layers'] = 'OpenStreetMap';
+			}
+		]]></hook>
+		<hook id="aop_new_section"><![CDATA[
+			if( $section == 'mapbbcode' ) {
+				if (file_exists($ext_info['path'].'/lang/'.$forum_user['language'].'/pun_mapbbcode.php'))
+					include $ext_info['path'].'/lang/'.$forum_user['language'].'/pun_mapbbcode.php';
+				else
+					include $ext_info['path'].'/lang/English/pun_mapbbcode.php';
+
+				// Setup the form
+				$forum_page['group_count'] = $forum_page['item_count'] = $forum_page['fld_count'] = 0;
+
+				// Setup breadcrumbs
+				$mapbbcode_link = forum_link(str_replace('features', 'mapbbcode', $forum_url['admin_settings_features']));
+				$forum_page['crumbs'] = array(
+					array($forum_config['o_board_title'], forum_link($forum_url['index'])),
+					array($lang_admin_common['Forum administration'], forum_link($forum_url['admin_index'])),
+					array($lang_admin_common['Settings'], forum_link($forum_url['admin_settings_setup'])),
+					array('MapBBCode', $mapbbcode_link)
+				);
+
+				$mapbb_libpath = $ext_info['url'].'/js';
+				$mapbb_lang = file_exists($ext_info['path'].'/js/lang/'.$lang_common['lang_identifier'].'.config.js') ? $lang_common['lang_identifier'] : 'en';
+				$proprietary = ($hook = get_hook('pun_mapbbcode_js_proprietary')) ? eval($hook) : '';
+
+				// todo: include mapbbcode-config etc
+				define('FORUM_PAGE_SECTION', 'settings');
+				define('FORUM_PAGE', 'admin-settings-mapbbcode');
+				require FORUM_ROOT.'header.php';
+
+				// START SUBST - <!-- forum_main -->
+				ob_start();
+
+				?>
+				<div class="main-content main-frm">
+					<div class="content-head">
+						<h2 class="hn"><span><?php echo $lang_pun_mapbbcode['MapBBCode head'] ?></span></h2>
+					</div>
+					<form class="frm-form" method="post" accept-charset="utf-8" action="<?php echo $mapbbcode_link ?>" id="mapbb_form">
+						<div class="hidden">
+							<input type="hidden" name="csrf_token" value="<?php echo generate_form_token($mapbbcode_link) ?>" />
+							<input type="hidden" name="form_sent" value="1" />
+							<input type="hidden" name="form[pun_mapbbcode_default_zoom]" value="<?php echo $forum_config['o_pun_mapbbcode_default_zoom'] ?>" />
+							<input type="hidden" name="form[pun_mapbbcode_default_pos]" value="<?php echo $forum_config['o_pun_mapbbcode_default_pos'] ?>" />
+							<input type="hidden" name="form[pun_mapbbcode_view_width]" value="<?php echo $forum_config['o_pun_mapbbcode_view_width'] ?>" />
+							<input type="hidden" name="form[pun_mapbbcode_view_height]" value="<?php echo $forum_config['o_pun_mapbbcode_view_height'] ?>" />
+							<input type="hidden" name="form[pun_mapbbcode_full_height]" value="<?php echo $forum_config['o_pun_mapbbcode_full_height'] ?>" />
+							<input type="hidden" name="form[pun_mapbbcode_editor_height]" value="<?php echo $forum_config['o_pun_mapbbcode_editor_height'] ?>" />
+							<input type="hidden" name="form[pun_mapbbcode_window_width]" value="<?php echo $forum_config['o_pun_mapbbcode_window_width'] ?>" />
+							<input type="hidden" name="form[pun_mapbbcode_window_height]" value="<?php echo $forum_config['o_pun_mapbbcode_window_height'] ?>" />
+							<input type="hidden" name="form[pun_mapbbcode_always_full]" value="<?php echo $forum_config['o_pun_mapbbcode_always_full'] ?>" />
+							<input type="hidden" name="form[pun_mapbbcode_editor_window]" value="<?php echo $forum_config['o_pun_mapbbcode_editor_window'] ?>" />
+							<input type="hidden" name="form[pun_mapbbcode_layers]" value="<?php echo forum_htmlencode($forum_config['o_pun_mapbbcode_layers']) ?>" />
+						</div>
+						<div class="ct-box" id="info-mapbbcode-intro">
+							<p><?php echo $lang_pun_mapbbcode['MapBBCode config intro'] ?></p>
+						</div>
+						<fieldset class="frm-group group<?php echo ++$forum_page['group_count'] ?>">
+							<legend class="group-legend"><strong><?php echo $lang_pun_mapbbcode['MapBBCode legend'] ?></strong></legend>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box checkbox">
+									<span class="fld-input"><input type="checkbox" id="fld<?php echo ++$forum_page['fld_count'] ?>" name="form[pun_mapbbcode_enable_external]" value="1"<?php if ($forum_config['o_pun_mapbbcode_enable_external'] == '1') echo ' checked="checked"' ?> /></span>
+									<label for="fld<?php echo $forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Enable external'] ?></span> <?php echo $lang_pun_mapbbcode['Enable external label'] ?></label>
+								</div>
+							</div>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box checkbox">
+									<span class="fld-input"><input type="checkbox" id="fld<?php echo ++$forum_page['fld_count'] ?>" name="form[pun_mapbbcode_standard_switcher]" value="1"<?php if ($forum_config['o_pun_mapbbcode_standard_switcher'] == '1') echo ' checked="checked"' ?> /></span>
+									<label for="fld<?php echo $forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Standard switcher'] ?></span> <?php echo $lang_pun_mapbbcode['Standard switcher label'] ?></label>
+								</div>
+							</div>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box text">
+									<label for="fld<?php echo ++$forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Outer link label'] ?></span><small><?php echo $lang_pun_mapbbcode['Outer link help'] ?></small></label><br />
+									<span class="fld-input"><input type="text" id="fld<?php echo $forum_page['fld_count'] ?>" name="form[pun_mapbbcode_outer_link]" size="50" maxlength="255" value="<?php echo forum_htmlencode($forum_config['o_pun_mapbbcode_outer_link']) ?>" /></span>
+								</div>
+							</div>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box text">
+									<label for="fld<?php echo ++$forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Allowed tags label'] ?></span><small><?php echo $lang_pun_mapbbcode['Allowed tags help'] ?></small></label><br />
+									<span class="fld-input"><input type="text" id="fld<?php echo $forum_page['fld_count'] ?>" name="form[pun_mapbbcode_allowed_tags]" size="50" maxlength="255" value="<?php echo forum_htmlencode($forum_config['o_pun_mapbbcode_allowed_tags']) ?>" /></span>
+								</div>
+							</div>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box text">
+									<label for="fld<?php echo ++$forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Share server label'] ?></span></label><br />
+									<span class="fld-input"><input type="text" id="fld<?php echo $forum_page['fld_count'] ?>" name="form[pun_mapbbcode_share_server]" size="50" maxlength="255" value="<?php echo forum_htmlencode($forum_config['o_pun_mapbbcode_share_server']) ?>" /></span>
+								</div>
+							</div>
+						</fieldset>
+						<?php $forum_page['item_count'] = 0; ?>
+						<fieldset class="frm-group group<?php echo ++$forum_page['group_count'] ?>">
+							<legend class="group-legend"><strong><?php echo $lang_pun_mapbbcode['MapBBCode config legend'] ?></strong></legend>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box text">
+									<label for="fld<?php echo ++$forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Layers label'] ?></span></label><br />
+									<span class="fld-input"><select id="layer_select" size="1"></select> <input type="button" id="addbutton" /></span>
+								</div>
+							</div>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>" style="display: none;" id="bing_key_row">
+								<div class="sf-box text">
+									<label for="fld<?php echo ++$forum_page['fld_count'] ?>"><span id="bing_key_title"></span></label><br />
+									<span class="fld-input"><input type="text" size="50" maxlength="120" id="bing_key" /></span>
+								</div>
+							</div>
+							<div id="panel_config"></div>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box text">
+									<label for="fld<?php echo ++$forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Default zoom pos label'] ?></span></label><br />
+									<span class="fld-input" id="default_zoom_pos"></span>
+								</div>
+							</div>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box text">
+									<label for="fld<?php echo ++$forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Panel size label'] ?></span></label><br />
+									<span class="fld-input" id="panel_size"></span>
+								</div>
+							</div>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box text">
+									<label for="fld<?php echo ++$forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Full height label'] ?></span></label><br />
+									<span class="fld-input" id="full_height"></span>
+								</div>
+							</div>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box text">
+									<label for="fld<?php echo ++$forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Window size label'] ?></span></label><br />
+									<span class="fld-input" id="window_size"></span>
+								</div>
+							</div>
+							<div class="sf-set set<?php echo ++$forum_page['item_count'] ?>">
+								<div class="sf-box text">
+									<label for="fld<?php echo ++$forum_page['fld_count'] ?>"><span><?php echo $lang_pun_mapbbcode['Editor height label'] ?></span></label><br />
+									<span class="fld-input" id="editor_height"></span>
+								</div>
+							</div>
+						</fieldset>
+						<div class="frm-buttons">
+							<span class="submit"><input type="submit" name="save" value="<?php echo $lang_admin_common['Save changes'] ?>" /></span>
+						</div>
+					</form>
+				</div>
+
+<link rel="stylesheet" href="<?php echo $mapbb_libpath ?>/leaflet.css" />
+<script src="<?php echo $mapbb_libpath ?>/leaflet.js"></script>
+<script src="<?php echo $mapbb_libpath ?>/mapbbcode-config.js"></script>
+<?php echo $proprietary ?>
+<script src="<?php echo $mapbb_libpath ?>/lang/<?php echo $mapbb_lang ?>.config.js"></script>
+
+<script language="javascript" type="text/javascript">
+<!--
+function isTrue(val) {
+	return val && val !== '0' && val !== 'false';
+}
+
+function updateTableValues() {
+	var f = document.getElementById('mapbb_form'),
+		full = isTrue(f.elements['form[pun_mapbbcode_always_full]'].value),
+		win = isTrue(f.elements['form[pun_mapbbcode_editor_window]'].value);
+	document.getElementById('default_zoom_pos').innerHTML = f.elements['form[pun_mapbbcode_default_zoom]'].value + ',' + f.elements['form[pun_mapbbcode_default_pos]'].value;
+	document.getElementById('panel_size').innerHTML = (full ? '<span style="color: #aaa;">' : '') + f.elements['form[pun_mapbbcode_view_width]'].value + 'x' + f.elements['form[pun_mapbbcode_view_height]'].value + (full ? '</span>' : '');
+	document.getElementById('full_height').innerHTML = f.elements['form[pun_mapbbcode_full_height]'].value;
+	document.getElementById('window_size').innerHTML = (win ? '' : '<span style="color: #aaa;">') + f.elements['form[pun_mapbbcode_window_width]'].value + 'x' + f.elements['form[pun_mapbbcode_window_height]'].value + (win ? '' : '</span>');
+	document.getElementById('editor_height').innerHTML = (win ? '<span style="color: #aaa;">' : '') + f.elements['form[pun_mapbbcode_editor_height]'].value + (win ? '</span>' : '');
+}
+
+var config = new MapBBCodeConfig({
+	layers: "<?php echo $forum_config['o_pun_mapbbcode_layers'] ?>".split(','),
+	defaultZoom: <?php echo $forum_config['o_pun_mapbbcode_default_zoom'] ?>,
+	defaultPosition: [<?php echo $forum_config['o_pun_mapbbcode_default_pos'] ?>],
+	viewWidth: <?php echo $forum_config['o_pun_mapbbcode_view_width'] ?>,
+	viewHeight: <?php echo $forum_config['o_pun_mapbbcode_view_height'] ?>,
+	fullViewHeight: <?php echo $forum_config['o_pun_mapbbcode_full_height'] ?>,
+	editorHeight: <?php echo $forum_config['o_pun_mapbbcode_editor_height'] ?>,
+	windowWidth: <?php echo $forum_config['o_pun_mapbbcode_window_width'] ?>,
+	windowHeight: <?php echo $forum_config['o_pun_mapbbcode_window_height'] ?>,
+	fullFromStart: <?php echo $forum_config['o_pun_mapbbcode_always_full'] ? 'true' : 'false' ?>,
+//		editorTypeFixed: true, // uncomment if needed
+	editorInWindow: <?php echo $forum_config['o_pun_mapbbcode_editor_window'] ? 'true' : 'false' ?> // set to true or false is needed
+});
+config.on('show change', function(options) {
+	var f = document.getElementById('mapbb_form');
+	f.elements['form[pun_mapbbcode_default_zoom]'].value = options.defaultZoom;
+	f.elements['form[pun_mapbbcode_default_pos]'].value = '' + options.defaultPosition[0] + ',' + options.defaultPosition[1];
+	f.elements['form[pun_mapbbcode_view_width]'].value = options.viewWidth;
+	f.elements['form[pun_mapbbcode_view_height]'].value = options.viewHeight;
+	f.elements['form[pun_mapbbcode_full_height]'].value = options.fullViewHeight;
+	f.elements['form[pun_mapbbcode_editor_height]'].value = options.editorHeight;
+	f.elements['form[pun_mapbbcode_window_width]'].value = options.windowWidth;
+	f.elements['form[pun_mapbbcode_window_height]'].value = options.windowHeight;
+	f.elements['form[pun_mapbbcode_layers]'].value = options.layers.join(',');
+	f.elements['form[pun_mapbbcode_always_full]'].value = options.fullFromStart ? '1' : '';
+	f.elements['form[pun_mapbbcode_editor_window]'].value = options.editorInWindow ? '1' : '';
+	updateTableValues();
+});
+config.bindLayerAdder({
+	select: 'layer_select',
+	button: 'addbutton',
+	keyBlock: 'bing_key_row',
+	keyBlockDisplay: 'block',
+	keyTitle: 'bing_key_title',
+	keyValue: 'bing_key'
+});
+config.show('panel_config');
+// -->
+</script>
+				<?php
+			}
+		]]></hook>
+	</hooks>
+
+</extension>

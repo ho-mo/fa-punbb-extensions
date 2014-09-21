@@ -1,0 +1,49 @@
+/**************************************************
+ * ChatLite theme to match PunBB default.
+ * @author Neck - http://www.eikylon.net
+ **************************************************/
+#ek_chatLite {
+	margin-bottom:1em;
+}
+#ek_chatLite .chatBox {
+	background-color:rgb(251,251,251);
+	border-color:rgb(223, 230, 237) rgb(223, 230, 237) rgb(203, 209, 216);
+	border-style:solid;
+	border-width:1px;
+}
+#ek_chatLite h2 {
+	background:rgb(31,83,123);
+	color:rgb(221,221,221);
+	font-size:1.084em;
+	font-weight:normal;
+	padding:.5em 10em .5em 1.5em;
+	width:auto;
+	zoom:100%;
+}
+#ek_chatLite br {
+	display:inline;
+}
+#ek_chatLite .chatError {
+	background-color:rgb(242,209,209);
+	cursor:pointer;
+	font-weight:bold;
+	padding:1px 1px 4px;
+	text-align:center;
+	zoom:100%;
+}
+#ek_chatLite .chatContent {
+	height:160px;
+	overflow:auto;
+	padding:2px;
+}
+#ek_chatLite input {
+	margin:2px 2px 4px;
+}
+#ek_chatLite .chatDel {
+	color:rgb(255,149,149);
+	cursor:pointer;
+	font-weight:bold;
+}
+#ek_chatLite .chatDel:hover {
+	color:rgb(255,79,79);
+}

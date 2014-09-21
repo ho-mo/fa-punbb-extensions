@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE extension SYSTEM "ext-1.0.dtd">
+
+<!--
+/**
+ * ChatLite: Adds a javascript chat to the forum.
+ * Please note the licence DOES NOT apply to prototype's framework supplied with this extension. 
+ *
+ * @author Neck - http://www.eikylon.net 
+ * @license Creative Commons Attribution 3.0 Unported - http://creativecommons.org/licenses/by/3.0/
+ * @package ek_chatlite 
+ */
+-->
+
+<extension engine="1.0">
+	<id>ek_chatlite</id>
+	<title>ChatLite</title>
+	<version>0.6.0</version>
+	<description>Adds a javascript chat to the forum index.</description>
+	<author>Neck - http://www.eikylon.net, Modified by slickplaid</author>
+	<minversion>1.4</minversion>
+	<maxtestedon>1.4.2</maxtestedon>
+
+	<install><![CDATA[
+
+// check the PHP version
+if(version_compare(PHP_VERSION, '5.2.1') === -1) {
+	$notices[] = '<strong>ERROR !</strong> PHP 5.2.1 or superior required ('.PHP_VERSION.' found). This extension cannot be run on your server, please uninstall it.';
+}
+// check write access on some files
+if(!is_writable($ext_info['path'].'/data/chat.dat') || !is_writable($ext_info['path'].'/data/.htaccess')) {
+	$notices[] = '<strong>WARNING !</strong> Write access needed. Please give php the permission to write in <em>ek_chatlite/data/chat.dat</em> and <em>ek_chatlite/data/.htaccess</em> before running the chat.';
+}
+
+	]]></install>
+
+	<hooks>
+		<hook id="hd_head" priority="4"><![CDATA[
+
+// add javascript and style files on the Index
+
+if(FORUM_PAGE === 'index') {
+// if(!$forum_user['is_guest']) { // this will remove the chat for users that aren't logged in
+//	if($forum_user['g_id'] != $forum_config['o_default_user_group']) { // this removes the chat for the default group, but leaves it for every other group
+		$forum_head['prototypejs'] = '<script type="text/javascript" src="'.$ext_info['url'].'/media/js/prototype.js"></script>';
+		$forum_head['ek_chatlitejs'] = '<script type="text/javascript" src="'.$ext_info['url'].'/media/js/chat.js?logged='.(($forum_user['is_guest']) ? 0 :(($forum_user['is_admmod']) ? 2 : 1)).'&amp;baseUri='.$base_url.'/&amp;extUri='.$ext_info['url'].'/"></script>';
+
+		if (file_exists($ext_info['path'].'/media/js/lang/'.$forum_user['language'].'.js')) {
+			$forum_head['ek_chatlitelangjs'] = '<script type="text/javascript" src="'.$ext_info['url'].'/media/js/lang/'.$forum_user['language'].'.js"></script>';
+		} else {
+			$forum_head['ek_chatlitelangjs'] = '<script type="text/javascript" src="'.$ext_info['url'].'/media/js/lang/English.js"></script>';
+		}
+
+		$ek_chatlite_css = (file_exists($ext_info['path'].'/media/css/'.$forum_user['style'].'.css')) ? $forum_user['style'] : 'default';
+		$forum_head['style_ek_chatlite'] = '<link rel="stylesheet" type="text/css" media="screen" href="'.$ext_info['url'].'/media/css/'.$ek_chatlite_css.'.css" />';
+//	} // comment out this bracket if you remove the default group portion above
+// } // comment out this bracket if you remove the guest (users not logged in) portion above
+} // 
+		]]></hook>
+		
+		<hook id="mi_new_action"><![CDATA[
+		
+
+if ($action == 'ek_chatlite') {
+	// the file we work on
+	$chatFile = $ext_info['path'].'/data/chat.dat';
+
+	$do = (isset($_POST['do'])) ? $_POST['do'] : null;
+	if($do === 'post') {
+		date_default_timezone_set('UTC');
+		$message = (isset($_POST['message'])) ? forum_trim($_POST['message']) : null;
+	
+		// check for guests or empty messages
+		if($forum_user['is_guest'] == true) {
+			header('HTTP/1.x 401 Unauthorized');
+			exit();
+		} else if (empty($message)) {
+			header('HTTP/1.x 404 Not Found');
+			exit();
+		} else {
+			// read chat's content
+			$content = file_get_contents($chatFile);
+			$content = (empty($content)) ? array() : json_decode($content);
+
+			// prepare values
+			$user = htmlspecialchars($forum_user['username']);
+			$message = str_replace("\n", '<br />', htmlspecialchars($message));
+
+			// check double message
+			$last = end($content);
+			if(!empty($last) && $last[1]===$user && $last[3]===$message) {
+				header('HTTP/1.x 403 Forbidden');
+				exit();
+			}
+
+			// add the new message
+			$content[] = array(
+				md5(uniqid(rand(), true)),
+				$user,
+				date('r'),
+				$message
+			);
+
+			// remove if there's more than 50 messages
+			while(count($content) >= 50) {
+				array_shift($content);
+			}
+
+			// encode and write
+			$content = json_encode($content);
+			file_put_contents($chatFile, $content);
+			// push the checksum
+			$check = md5($content);
+			$htaccess = file_get_contents($ext_info['path'].'/data/.htaccess');
+			$htaccess = preg_replace('`X-json "\\\"\w{32}\\\""`', 'X-json "\"'.$check.'\""', $htaccess);
+			file_put_contents($ext_info['path'].'/data/.htaccess', $htaccess);
+		}
+	} else if ($do === 'del') {
+		// admins/mods only
+		if($forum_user['is_admmod'] != true) {
+			header('HTTP/1.x 401 Unauthorized');
+			exit();
+		}
+
+		// get and validate message id
+		$msgId = (isset($_POST['msgId'])) ? $_POST['msgId'] : null;
+		if(preg_match('`\w{32}`A', $msgId) == 0) {
+			header('HTTP/1.x 404 Not Found');
+			exit();
+		}
+
+		// get content, seek for the message and delete it
+		$found = false;
+		$content = file_get_contents($chatFile);
+		$content = (empty($content)) ? array() : json_decode($content);
+		foreach($content as $i=>$msg) {
+			if($msg[0] === $msgId) {
+				array_splice($content, $i, 1);
+				$found = true;
+				break;
+			}
+		}
+
+		// return new content or an error
+		if($found) {
+			// encode and write
+			$content = json_encode($content);
+			file_put_contents($chatFile, $content);
+			// push the checksum
+			$check = md5($content);
+			$htaccess = file_get_contents($ext_info['path'].'/data/.htaccess');
+			$htaccess = preg_replace('`X-json "\\\"\w{32}\\\""`', 'X-json "\"'.$check.'\""', $htaccess);
+			file_put_contents($ext_info['path'].'/data/.htaccess', $htaccess);
+			
+		} else {
+			header('HTTP/1.x 404 Not Found');
+			exit();
+		}
+	} else {
+		$content = file_get_contents($ext_info['path'].'/data/chat.dat');
+		$check = md5($content);
+	}
+
+	// return chat content
+	header('X-json: "'.$check.'"');
+	echo $content;
+	exit();
+}
+
+		]]></hook>
+
+		<hook id="co_modify_url_scheme"><![CDATA[
+
+// disable token validation for chat submit
+if(get_current_url() === $base_url.'/misc.php?action=ek_chatlite') {
+	$_POST['csrf_token'] = generate_form_token($base_url.'/misc.php?action=ek_chatlite');
+}
+		]]></hook>
+	</hooks>
+</extension>

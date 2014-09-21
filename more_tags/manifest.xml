@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<extension engine="1.0">
+    <id>more_tags</id>
+    <title>More BBCode Tags</title>
+	<version>1.1</version>
+    <description>Add More tags for BBCode forum tags like center,right,left,youtube,size,mp3 etc.</description>
+    <author>OmedOnlnie - Delta</author>
+    <minversion>1.4.2</minversion>
+    <maxtestedon>1.4.2</maxtestedon>
+
+
+
+     <hooks>
+	 		<hook id="hd_head"><![CDATA[
+		if ($forum_user['pun_bbcode_use_buttons'] == '1') {
+		if ($forum_user['style'] != 'Oxygen' && file_exists($ext_info['path'].'/css/'.$forum_user['style'].'/more_tags.css')) {
+				$forum_loader->add_css($ext_info['url'].'/css/'.$forum_user['style'].'/more_tags.css', array('type' => 'url', 'media' => 'screen'));
+		} else {
+				$forum_loader->add_css($ext_info['url'].'/css/Oxygen/more_tags.css', array('type' => 'url', 'media' => 'screen'));
+			}
+		}
+		]]></hook>
+	
+		<hook id="ps_preparse_tags_start"><![CDATA[
+		$tags[] = 'mp3';
+		$tags_opened[] = 'mp3';
+		$tags_closed[] = 'mp3';
+		$tags_inline[] = 'mp3';
+		$tags_trim[] = 'mp3';
+		$tags_limit_bbcode['mp3'] = array('url');
+		]]></hook>
+		
+	<hook id="pun_bbcode_pre_buttons_output">
+	<![CDATA[
+		$this->add_button(array('name'	=> 'justify', 'weight' => 2, 'image' => true));
+		$this->add_button(array('name'	=> 'right', 'weight' => 6, 'image' => true));
+		$this->add_button(array('name'	=> 'center', 'weight' => 12, 'image' => true));
+		$this->add_button(array('name'	=> 'left', 'weight' => 16, 'image' => true));
+		$this->add_button(array('name'	=> 's', 'weight' => 36, 'image' => true));
+		$this->add_button(array('name'	=> 'size', 'type' => 'with_attr', 'weight' => 38, 'image' => true));
+		$this->add_button(array('name'	=> 'sup', 'weight' => 39, 'image' => true));
+		$this->add_button(array('name'	=> 'sub', 'weight' => 39, 'image' => true));
+		$this->add_button(array('name'	=> 'mp3', 'weight' => 90, 'image' => true));
+		$this->add_button(array('name'	=> 'youtube', 'weight' => 96, 'image' => true));
+		]]></hook>
+		
+	<hook id="ps_do_bbcode_replace">
+	<![CDATA[
+	$pattern[] = '#\[s\](.*?)\[/s\]#ms';
+	$pattern[] = '#\[justify\](.*?)\[/justify\]#ms';
+	$pattern[] = '#\[right\](.*?)\[/right\]#ms';
+	$pattern[] = '#\[center\](.*?)\[/center\]#ms';
+	$pattern[] = '#\[left\](.*?)\[/left\]#ms';
+	$pattern[] = '#\[size=([0-9]*)](.*?)\[/size\]#ms';
+	$pattern[] = '`\[youtube\]([^\[]+)\[/youtube\]`e';
+	$pattern[] = '#\[sup\](.*?)\[/sup\]#ms';
+	$pattern[] = '#\[sub\](.*?)\[/sub\]#ms';
+	$pattern[] = '`\[mp3\]([^\[]+)\[/mp3\]`e';
+    
+	$replace[] = '<span style="text-decoration: line-through;">$1</span>';
+	$replace[] = '<p><p style="text-align:justify;">$1</p></p>';
+	$replace[] = '<p><p style="text-align:right;">$1</p></p>';
+	$replace[] = '<p><p style="text-align:center;">$1</p></p>';
+	$replace[] = '<p><p style="text-align:left;">$1</p></p>';
+	$replace[] = '<span style="font-size: $1px">$2</span>';
+	$replace[] = 'youtube_tag_ooline(\'$1\')';
+	$replace[] = '<sup>$1</sup>';
+	$replace[] =  '<sub>$1</sub>';
+	$replace[] = 'handle_mp3_tag(\'$1\')';
+	]]></hook>	
+
+	<hook id="ps_start"><![CDATA[
+	   $path1 = $ext_info['url'];
+           function handle_mp3_tag($Mp3Uri) {
+	           global $forum_config, $path1;
+	           $match = array();
+	           preg_match('`href="(.+\.mp3)"`U', stripslashes($Mp3Uri), $match);
+	           if(!empty($match[1])) {
+	           $Mp3Uri = $match[1];
+	           }
+             $match = array();
+             preg_match('#(.+\.mp3)#U',$Mp3Uri, $match);
+             if(empty($match[1])){
+               return "Needs to end.mp3";
+             }
+           $player_url     = $path1.'/delta.swf';
+           $player_bgcolor = 'ffffff';
+           $player_width   = 240;
+           $player_height  = 20;
+           $player_param   = '?bgcolor='.$player_bgcolor.'&amp;mp3=' .$Mp3Uri;
+           $player_alternative = '<strong>Flash not detected</strong>';
+    return
+		'<object type="application/x-shockwave-flash" data="'.$player_url.$player_param.'" width="'.$player_width.'" height="'.$player_height.'">'.
+			'<param name="movie" value="'.$player_url.$player_param.'" />'.
+			'<param name="bgcolor" value="#'.$player_bgcolor.'" />'.
+		'</object>';
+	
+}
+			function youtube_tag_ooline($videoUri) {
+				global $forum_config, $youtube_tag;
+				$match = array();
+				preg_match('`href="([^"]+)"`', stripslashes($videoUri), $match);
+				if (!empty($match[1])) {
+					$videoUri = $match[1];
+				}
+				$service = array(
+					'youtube' => array(
+						'match'			=> '`youtube.com.*v=([-_a-z0-9]+)`i',
+						'uri'			=> 'http://www.youtube.com/v/%s&amp;rel=0',
+						'html5_uri'		=> '<iframe type="text/html" width="640" height="385" src="http://www.youtube.com/embed/%s?wmode=transparent&amp;autohide=1&amp;showinfo=0" frameborder="0"></iframe>',
+						'width'			=> 640,
+						'height'		=> 385
+					),
+					'youtu' => array(
+						'match'			=> '`youtu.be/([-_a-z0-9]+)`i',
+						'uri'			=> 'http://www.youtube.com/v/%s&amp;rel=0',
+						'html5_uri'		=> '<iframe  type="text/html" width="640" height="385" src="http://www.youtube.com/embed/%s?wmode=transparent&amp;autohide=1&amp;showinfo=0" frameborder="0"></iframe>',
+						'width'			=> 640,
+						'height'		=> 385
+					)
+				);
+				preg_match('`^(?:http|https)://(?:[^\.]*\.)?([^\.]*)\.[^/]*/`i', $videoUri, $match);
+				if (empty($match[1]) || !array_key_exists($match[1], $service)) {
+					return '<a href="'.$videoUri.'">['.$youtube_tag["unknown_source"].']</a>';
+				}
+				$youtube_tag_ooline2 = $service[$match[1]];
+				preg_match($youtube_tag_ooline2['match'], $videoUri, $match);
+				if (empty($match[1])) {
+					return '<a href="'.$videoUri.'">['.$youtube_tag["unknown_source"].']</a>';
+				}
+				$youtube_tag_ooline3 = forum_htmlencode($match[1]);
+				if ($forum_config['o_fancy_video_tag_html5'] == '1' && isset($youtube_tag_ooline2['html5_uri'])) {
+					return '<div class="fancy_video_tag_player">'.sprintf($youtube_tag_ooline2['html5_uri'], $youtube_tag_ooline3).'</div>';
+				}
+				if (isset($youtube_tag_ooline2['video_uri'])) {
+					$playerUri = sprintf($youtube_tag_ooline2['video_uri'], $youtube_tag_ooline3);
+				} else {
+					$playerUri = sprintf($youtube_tag_ooline2['uri'], $youtube_tag_ooline3);
+				}
+				return '<div><object type="application/x-shockwave-flash" data="'.$playerUri.'" width="'.$youtube_tag_ooline2['width'].'" height="'.$youtube_tag_ooline2['height'].'">'.
+					'<param name="movie" value="'.$playerUri.'" />'.
+					'<param name="wmode" value="transparent" />'.
+					'<param name="allowfullscreen" value="true" />'.
+					'<p><a href="'.$videoUri.'">['.$youtube_tag["no flash"].']</a></p>'.
+				'</object></div>';
+			}
+		]]></hook>
+    </hooks>
+</extension>

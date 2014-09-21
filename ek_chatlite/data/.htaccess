@@ -1,0 +1,5 @@
+<IfModule mod_headers.c>
+	<Files chat.dat>
+		Header set X-json "\"0cbcafa3ff637c9f22ab8baa9c65ec7a\""
+	</Files>
+</IfModule>

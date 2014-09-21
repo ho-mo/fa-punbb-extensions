@@ -1,0 +1,41 @@
+
+#pun_bbcode_bar #pun_bbcode_button_sup.image {
+    background: url(img/sup.png) 50% 50% no-repeat;
+}
+#pun_bbcode_bar #pun_bbcode_button_sub.image {
+    background: url(img/sub.png) 50% 50% no-repeat;
+}
+#pun_bbcode_bar #pun_bbcode_button_size.image {
+    background: url(img/size.png) 50% 50% no-repeat;
+}
+
+#pun_bbcode_bar #pun_bbcode_button_s.image {
+    background: url(img/strikethrough.png) 50% 50% no-repeat;
+}
+
+#pun_bbcode_bar #pun_bbcode_button_mp3.image {
+    background: url(img/mp3.png) 50% 50% no-repeat;
+}
+#pun_bbcode_bar #pun_bbcode_button_audio.image {
+    background: url(img/audio.png) 50% 50% no-repeat;
+}
+
+#pun_bbcode_bar #pun_bbcode_button_youtube.image {
+    background: url(img/youtube.png) 50% 50% no-repeat;
+}
+
+#pun_bbcode_bar #pun_bbcode_button_justify.image {
+    background: url(img/justify.png) 50% 50% no-repeat;
+}
+
+#pun_bbcode_bar #pun_bbcode_button_center.image {
+    background: url(img/center.png) 50% 50% no-repeat;
+}
+
+#pun_bbcode_bar #pun_bbcode_button_right.image {
+    background: url(img/right.png) 50% 50% no-repeat;
+}
+
+#pun_bbcode_bar #pun_bbcode_button_left.image {
+    background: url(img/left.png) 50% 50% no-repeat;
+}

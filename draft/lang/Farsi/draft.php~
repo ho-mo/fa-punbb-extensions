@@ -1,0 +1,16 @@
+<?php
+if (!defined('FORUM')) die();
+$lang_draft = array(
+'Drafts'		=>	'چرک نویس ها',
+'Drafts title'		=>	'مشاهده چرک نویس ها',
+'No drafts'		=>	'شما هیچ چرک نویسی ندارید.',
+'Save draft button'		=>	'بصورت چرک نویس ذخیره کن.',
+'Edit'		=>	'ویرایش چرک نویس.',
+'Delete'		=>	'حذف',
+'Delete draft reply confirm'		=>	'این چرک نویس را که پاسخ تایپک پاک کن. "%1$s"',
+'Delete draft topic confirm'		=>	'Delete this draft topic',
+'Delete draft'		=>	'Delete draft',
+'Draft del redirect'		=>	'Draft deleted. Redirecting...',
+'Draft saved'		=>	'Draft saved.',
+);
+?>
