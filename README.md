@@ -5,15 +5,25 @@ use this extionsions to make your punbb-froum better espacially for Persian foru
 ,this extensions translated for persian forum.
 
 chat 
+
 افزونه ای برای چت افراد انجمن مبتنی بر Ajax
+
 developer_helper
+
 پیش نیاز برخی افزونه ها
+
 draft
+
 اضافه کردن چرک نویس برای نوشتن
+
 ek_chatlite
+
 یک افزونه برای چت (افزونه chat بهتر است)
+
 fancy_spoiler
+
 اضافه کردن حالت کرکره ای برای نوشتن براساس bbcode
+
 fancy_stop_spam
 جلوگیری از فعالیت های هرزه
 gender
